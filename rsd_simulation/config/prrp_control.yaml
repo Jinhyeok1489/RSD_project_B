@@ -1,0 +1,32 @@
+prrp_control:
+  # Publish all joint states -----------------------------------
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 1000  
+  
+  # Position Controllers ---------------------------------------
+  joint_1_position_controller:
+    type: effort_controllers/JointPositionController
+    joint: joint_1
+    publish_rate: 1000
+    pid: {p: 1.0, i: 0.01, d: 0.01}
+
+  joint_2_position_controller:
+    type: effort_controllers/JointPositionController
+    joint: joint_2
+    publish_rate: 1000
+    pid: {p: 1.0, i: 0.01, d: 0.01}
+
+  joint_3_position_controller:
+    type: effort_controllers/JointPositionController
+    joint: joint_3
+    publish_rate: 1000
+    pid: {p: 1.0, i: 0.01, d: 0.01}
+
+  joint_4_position_controller:
+    type: effort_controllers/JointPositionController
+    joint: joint_4
+    publish_rate: 1000
+    pid: {p: 1.0, i: 0.01, d: 0.01}
+  
+ 
