@@ -17,11 +17,12 @@
   </include>
 
   <!-- Load the URDF into the ROS Parameter Server -->
-  <param name="robot_description" command="$(find xacro)/xacro --inorder '$(find rsd_description)/urdf/prrp.urdf'" /> 
+  <param name="robot_description"
+    command="$(find xacro)/xacro --inorder '$(find rsd_description)/urdf/prrp_script.urdf'" />
 
   <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
-    args="-urdf -model ex_urdf_prrp -param robot_description"/> 
+    args="-urdf -model prrp_control -param robot_description"/> 
 
 
 </launch>

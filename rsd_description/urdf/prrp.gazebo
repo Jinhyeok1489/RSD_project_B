@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<robot>
+    <gazebo>
+        <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+        <robotNamespace>/prrp_control</robotNamespace>
+        <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+        </plugin>
+    </gazebo>
+
+    <!-- Base link -->
+    <gazebo reference="base_link">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/black</material>
+    </gazebo>  
+
+    <!-- pan link -->
+    <gazebo reference="pan_link">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/white</material>
+    </gazebo>    
+
+    <gazebo reference="link_1">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/black</material>
+    </gazebo>    
+
+    <gazebo reference="link_2">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/white</material>
+
+    </gazebo>      
+
+    <gazebo reference="link_3">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/black</material>
+    </gazebo>    
+
+    <gazebo reference="link_4">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/white</material>
+    </gazebo>   
+
+    <gazebo reference="link_5">
+        <selfCollide>false</selfCollide>
+        <mu1 value="0.5"/>
+        <mu2 value="0.5"/>
+        <!-- <kp value="10000000.0" />
+                <kd value="1" />
+                <fdir1 value="1 0 0"/> -->
+        <material>Gazebo/black</material>
+    </gazebo>   
+</robot>

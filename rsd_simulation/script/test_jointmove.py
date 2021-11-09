@@ -24,10 +24,14 @@ if __name__ == '__main__':
     pub_j3 = rospy.Publisher('/prrp_control/joint_3_position_controller/command', Float64, queue_size=10)
     pub_j4 = rospy.Publisher('/prrp_control/joint_4_position_controller/command', Float64, queue_size=10)
 
-    rate = rospy.Rate(20)
+    rate = rospy.Rate(1000)
 
     while not rospy.is_shutdown():
-        pub_j1.publish(0.1)
-        pub_j2.publish(math.pi)
-        pub_j3.publish(math.pi/4)
-        pub_j4.publish(-0.1)
+        pub_j1.publish(0)
+        pub_j2.publish(0)
+        pub_j3.publish(0)
+        pub_j4.publish(0)
+
+        # print(0)
+
+        rate.sleep()
