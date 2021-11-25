@@ -10,9 +10,6 @@ import sys, select, termios, tty
 from std_msgs.msg import Float64
 from sensor_msgs.msg import Imu
 from rosgraph_msgs.msg import Clock
-from snake_control.msg import GaitParameter
-from snake_control.msg import ParamtoSine
-from snake_control.msg import DstTime
 from gazebo_msgs.msg import LinkStates
 from geometry_msgs.msg import Pose
 
@@ -24,10 +21,12 @@ if __name__ == '__main__':
     pub_j3 = rospy.Publisher('/prrp_control/joint_3_position_controller/command', Float64, queue_size=10)
     pub_j4 = rospy.Publisher('/prrp_control/joint_4_position_controller/command', Float64, queue_size=10)
 
+    rospy.wait_for_service()
+
     rate = rospy.Rate(1000)
 
     while not rospy.is_shutdown():
-        pub_j1.publish(0)
+        pub_j1.publish(-0.05)
         pub_j2.publish(0)
         pub_j3.publish(0)
         pub_j4.publish(0)
