@@ -102,7 +102,7 @@ def ikine_prrp(pose, l1, l2):
 if __name__ == '__main__':
     rospy.init_node('test_move', anonymous=True)
 
-    pose = [0.32, -0.18, -0.075]
+    pose = [0.34, 0.18, -0.075]
     l1 = 0.2
     l2 = 0.22
     ikine_sol = ikine_prrp(pose, l1, l2)

@@ -16,6 +16,21 @@ Using joint_state_publisher_gui package, you can adjust joint values.
 
 ![ex_screenshot](./img/rviz.png)
 
+### Inverse kinematics position displaying
+
+    <rosparam param="source_list">[prrp/joint_states]</rosparam>
+
+By adding this code on launch file, script-based robot control was possible.
+
+Inverse kinematics was solved analytically. Need to select solution..
+
+### Issues
+- Inverse kinematics solution need to be selected.
+
+### ToDo
+- Need to select inverse kinematics solution among two solutions
+- Need to generate cartesian trajectory
+
 ## Gazebo implementation of prrp robot
 To implement Gazebo simulation,
 
