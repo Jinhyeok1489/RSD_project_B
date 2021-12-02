@@ -12,9 +12,8 @@ Main reference
 def findDes(images):
     desList = []
     for img in images:
-
         kp, des = detector.detectAndCompute(img, None)
-        print("kp: ", len(kp))
+        # print("kp: ", len(kp))
         desList.append(des)
     return desList
 
@@ -33,7 +32,7 @@ def findID(img, desList, threshold = 0):
             # print("Try matching...")
             good = []
             for m, n in matches:
-                if m.distance < 0.5 * n.distance:
+                if m.distance < 0.75 * n.distance:
                     good.append([m])
             # print("Matched and append... ")
             # print("Good: ", good)
@@ -77,7 +76,7 @@ def preprocess_img(img, drawContour):
     masked = cv2.bitwise_and(img2, mask)    
 
     # frame_g = cv2.cvtColor(masked, cv2.COLOR_RGB2GRAY)
-    ret, img3 = cv2.threshold(masked, 220, 255, 0)
+    ret, img3 = cv2.threshold(masked, 200, 255, 0)
     if drawContour == True:
         contours, hierarchy = cv2.findContours(img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in contours:
@@ -90,8 +89,8 @@ def extract_card(img):
     * Input:
             img: binary_img
     """
-    result4 = cv2.resize(img, dsize=(360,480), interpolation = cv2.INTER_AREA)
-    # pattern_img = result[0:80, 0:60]
+    result = np.zeros_like(img)
+    pattern_img = result[0:80, 0:60]
     try:
         contours, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # print("len of contours: ", len(contours))
@@ -104,7 +103,8 @@ def extract_card(img):
         epsilon = cv2.arcLength(ctr, True)*0.02
         approx = cv2.approxPolyDP(ctr, epsilon, True)
 
-        print(len(approx))
+        resize_img = cv2.resize(img, dsize=(360,480), interpolation = cv2.INTER_AREA)
+
         edge = approx.reshape(4,2)
         # print(edge)
         pts = solving_vertex(edge)
@@ -120,7 +120,7 @@ def extract_card(img):
         # result2 = cv2.rectangle(result2, (0, 90), (50, 140), (0, 0, 255), 3)
 
         # result2 = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-        # ret, result3 = cv2.threshold(result2, 200, 255, 0), pattern_img4
+        # ret, result3 = cv2.threshold(result2, 200, 255, 0)
         # result3 = cv2.erode(result3, kernel, iterations = 3)
         result4 = cv2.bitwise_not(result)
 
@@ -129,13 +129,13 @@ def extract_card(img):
         # cv2.rectangle(mask, (600, 200), (1320, 680), (255, 255, 255), -1)
 
         # Cut images
-        # pattern_img = result4[0:80, 0:60].copy()
+        pattern_img = result4[0:80, 0:60].copy()
     except:
-        # result4 = np.zeros((480, 360))
         pass
-    return result4
+    return result, pattern_img
 
-path = 'Card_Imgs/Cards'
+
+path = 'Card_Imgs/Numbers'
 # orb = cv2.ORB_create(nfeatures = 1000)
 detector = cv2.xfeatures2d.SIFT_create()
 
@@ -156,35 +156,23 @@ print(classNames)
 
 desList = findDes(images)
 print(len(desList))
-
+import pdb; pdb.set_trace
 cap = cv2.VideoCapture(2)
+
 cap.set(15, 5)
 cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
 cap.set(3, 1920)
 cap.set(4, 1080)
-
 #### While loop
 while True:
     success, img2 = cap.read()
+    print(img2)
     imgOriginal = img2.copy()
     img3 = preprocess_img(img2, drawContour = False)
 
 
     cv2.imshow('simg2', img3)
-    result = extract_card(img3)
-    # print(img_card)
-    cv2.imshow('Card', result)
-    # cv2.imshow('car_pattern', img_card)
-
-    id = findID(result, desList, 0)
-
-    if id != -1:
-        print(classNames[id])
-        cv2.putText(imgOriginal, classNames[id], (960, 300), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
-
-    cv2.imshow('OriginalImage', imgOriginal)
-    # Find descriptor of webcam image
-
+    result, img_card  = extract_card(img3)
 
     cv2.waitKey(1)
 
