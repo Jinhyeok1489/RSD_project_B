@@ -27,7 +27,7 @@ def solving_vertex(pts):
     return points
 
 
-img1 = cv2.imread('/home/jinhyeok/catkin_ws/src/rsd_project/RSD_project_B/rsd_vision/script/Card_Imgs/Four.jpg')
+img1 = cv2.imread('/home/jinhyeok/catkin_ws/src/rsd_project/RSD_project_B/rsd_vision/script/Card_Imgs/Two.jpg')
 gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
 
 while(True):
@@ -110,50 +110,6 @@ while(True):
         #         cv2.line(frame, tuple(contour[j][0]), tuple(contour[j+1][0]), color, 3)
     
     resize_img = cv2.resize(frame, dsize=(360,480), interpolation = cv2.INTER_AREA)
-    # for i in range(len(aaa)):
-    #     edge = aaa[i, :, :].reshape(4,2)
-    #     pts = solving_vertex(edge)
-    #     edge_np = np.array(pts, dtype = np.float32)
-    #     print("Edges: ", edge_np)
-    #     dst_np = np.array([[0,0], [0, 480], [360, 0], [360,480]], dtype = np.float32)
-        
-    #     print("Move: ", dst_np)
-    #     M = cv2.getPerspectiveTransform(edge_np, dst_np)
-    #     result = cv2.warpPerspective(frame, M = M, dsize = (360, 480))
-    #     kernel = np.ones((3,3), np.uint8)
-    #     result = cv2.erode(result, kernel, iterations = 1)
-    #     # result2 = cv2.rectangle(result, (0, 20), (60, 90), (0, 0, 255), 3)
-    #     # result2 = cv2.rectangle(result2, (0, 90), (50, 140), (0, 0, 255), 3)
-
-    #     result2 = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-    #     ret, result3 = cv2.threshold(result2, 200, 255, 0)
-    #     # result3 = cv2.erode(result3, kernel, iterations = 3)
-    #     result4 = cv2.bitwise_not(result3)
-
-    #     mask2 = np.zeros((200, 350))
-    #     # cv2.rectangle(mask, (100, 0), (520, 340), (255, 255, 255), -1)
-    #     # cv2.rectangle(mask, (600, 200), (1320, 680), (255, 255, 255), -1)
-    #     cv2.rectangle(result4, (50, 30), (350, 450), (0, 0, 0), -1)
-
-    #     # masked = cv2.bitwise_and(frame, mask)
-
-    #     cv2.imshow("cut"+str(i), result4)
-
-    #     detector = cv2.xfeatures2d.SIFT_create()
-
-    #     kp1, desc1 = detector.detectAndCompute(result4, None)
-    #     kp2, desc2 = detector.detectAndCompute(gray1, None)
-
-    #     FLANN_INDEX_KDTREE = 1
-    #     index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees=5)
-    #     search_params = dict(checks = 50)
-
-    #     matcher = cv2.FlannBasedMatcher(index_params, search_params)
-    #     matches = matcher.match(desc1, desc2)
-
-    #     res = cv2.drawMatches(result4, kp1, gray1, kp2, matches, None, 
-    #                         flags = cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
-    #     cv2.imshow('Flann + SIFT', res)
 
     edge = aaa[0, :, :].reshape(4,2)
     pts = solving_vertex(edge)
@@ -169,6 +125,8 @@ while(True):
     # result2 = cv2.rectangle(result, (0, 20), (60, 90), (0, 0, 255), 3)
     # result2 = cv2.rectangle(result2, (0, 90), (50, 140), (0, 0, 255), 3)
 
+    
+
     result2 = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
     ret, result3 = cv2.threshold(result2, 200, 255, 0)
     # result3 = cv2.erode(result3, kernel, iterations = 3)
@@ -177,7 +135,13 @@ while(True):
     mask2 = np.zeros((200, 350))
     # cv2.rectangle(mask, (100, 0), (520, 340), (255, 255, 255), -1)
     # cv2.rectangle(mask, (600, 200), (1320, 680), (255, 255, 255), -1)
-    cv2.rectangle(result4, (50, 30), (320, 450), (0, 0, 0), -1)
+
+    # Cut images
+    pattern_img = result4[0:130, 0:60].copy()
+
+    cv2.imshow("PatternNShape", pattern_img)
+
+    # cv2.rectangle(result4, (50, 30), (320, 450), (0, 0, 0), -1)
 
     # masked = cv2.bitwise_and(frame, mask)
 
@@ -186,10 +150,10 @@ while(True):
     detector = cv2.xfeatures2d.SIFT_create()
 
 
-    kp1, desc1 = detector.detectAndCompute(result4, None)
+    kp1, desc1 = detector.detectAndCompute(pattern_img, None)
     kp2, desc2 = detector.detectAndCompute(gray1, None)
 
-    FLANN_INDEX_KDTREE = 1
+    # FLANN_INDEX_KDTREE = 1
 
     # orb = cv2.ORB_create()
 
@@ -202,11 +166,21 @@ while(True):
     # good = []
 
 
-    index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees=5)
-    search_params = dict(checks = 50)
+    # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees=5)
+    # search_params = dict(checks = 50)
 
-    matcher = cv2.FlannBasedMatcher(index_params, search_params)
-    matches = matcher.match(desc1, desc2)
+    # matcher = cv2.FlannBasedMatcher(index_params, search_params)
+    # matches = matcher.match(desc1, desc2)
+
+    bf = cv2.BFMatcher()
+    matches = bf.knnMatch(desc1, desc2, k = 2)
+
+    good = []
+    for m, n in matches:
+        if m.distance < 0.9*n.distance:
+            good.append([m])
+
+    print(len(good))    
 
     # good = []
     # for m, n in matches:
@@ -217,8 +191,7 @@ while(True):
     # res = cv2.drawMatchesKnn(result4, kp1, gray1, kp2, matches, None, 
     #                     flags = cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
 
-    res = cv2.drawMatches(result4, kp1, gray1, kp2, matches, None, \
-                flags=cv2.DRAW_MATCHES_FLAGS_NOT_DRAW_SINGLE_POINTS)
+    res = cv2.drawMatchesKnn(pattern_img, kp1, gray1, kp2, good, None, flags=2)
     cv2.imshow('Flann + SIFT', res)
 
 
