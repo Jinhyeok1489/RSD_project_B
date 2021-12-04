@@ -1,14 +1,14 @@
 % Test case 1: link length = 0.2m, 0.2m
 
 % link length
-l1 = 0.2;
-l2 = 0.22;
+l1 = 0.22;
+l2 = 0.20;
 
 % Angle limit
 th1_min = -pi;
 th1_max = +pi;
-th2_min = -pi/3*2;
-th2_max = +pi/3*2;
+th2_min = -pi/2;
+th2_max = +pi/2;
 
 points = 100000;
 
@@ -33,7 +33,12 @@ plot(x_mat, y_mat, 'ob', 'MarkerFaceColor', 'b');
 hold on;
 plot(0,0, 'or', 'MarkerFaceColor', 'r', 'MarkerSize', 20);
 
-rectangle('Position', [0.21,-0.1, 0.2, 0.2], 'EdgeColor', 'r', 'LineWidth', 3)
+rectangle('Position', [0.255,-0.1, 0.2, 0.2], 'EdgeColor', 'r', 'LineWidth', 3)
+rectangle('Position', [0.255, -0.1, 0.08, 0.06], 'EdgeColor', 'g', 'LineWidth', 5)
+rectangle('Position', [0.255, 0.02, 0.06, 0.08], 'EdgeColor', 'g', 'LineWidth', 5)
+rectangle('Position', [0.375, -0.1, 0.08, 0.06], 'EdgeColor', 'g', 'LineWidth', 5)
+rectangle('Position', [0.390, 0.02, 0.06, 0.08], 'EdgeColor', 'g', 'LineWidth', 5)
+
 set(gca, 'FontSize', 32, 'FontName', 'Times')
 
 % text(0,0, '\leftarrow origin of manipulator', 'FontSize', 25)

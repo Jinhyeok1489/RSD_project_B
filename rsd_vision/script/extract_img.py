@@ -33,7 +33,7 @@ def findID(img, desList, threshold = 0):
             # print("Try matching...")
             good = []
             for m, n in matches:
-                if m.distance < 0.6 * n.distance:
+                if m.distance < 0.5 * n.distance:
                     good.append([m])
             # print("Matched and append... ")
             # print("Good: ", good)
@@ -66,16 +66,13 @@ def solving_vertex(pts):
 
     return points
 
-def preprocess_img(img, drawContour, drawMask):
+def preprocess_img(img, drawContour):
     img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     mask = np.zeros_like(img2)
     # cv2.rectangle(mask, (100, 0), (520, 340), (255, 255, 255), -1)
     # cv2.rectangle(mask, (600, 200), (1320, 680), (255, 255, 255), -1)
-    start = (350, 200)
-    end = (1470, 780)
-
-    cv2.rectangle(mask, start, end , (255, 255, 255), -1)
+    cv2.rectangle(mask, (400, 300), (1520, 780), (255, 255, 255), -1)
 
     masked = cv2.bitwise_and(img2, mask)    
 
@@ -86,21 +83,14 @@ def preprocess_img(img, drawContour, drawMask):
         for cnt in contours:
             cv2.drawContours(img, [cnt], 0, (255, 0, 0), 3)
 
-    if drawMask == True:
-        cv2.rectangle(img, start, end, (255, 0, 0), 3)
+    return img3, img
 
-    # img3:     thresholded img
-    # img2:     grayscale img
-    # img:      original img
-    return img3, img2, img
-
-def extract_card(img, img2):
+def extract_card(img):
     """
     * Input:
             img: binary_img
-            img2: grayscale_img
     """
-    result4 = cv2.resize(img2, dsize=(360,480), interpolation = cv2.INTER_AREA)
+    result4 = cv2.resize(img, dsize=(360,480), interpolation = cv2.INTER_AREA)
     # pattern_img = result[0:80, 0:60]
     try:
         contours, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -114,7 +104,7 @@ def extract_card(img, img2):
         epsilon = cv2.arcLength(ctr, True)*0.02
         approx = cv2.approxPolyDP(ctr, epsilon, True)
 
-        # print(len(approx))
+        print(len(approx))
         edge = approx.reshape(4,2)
         # print(edge)
         pts = solving_vertex(edge)
@@ -123,16 +113,16 @@ def extract_card(img, img2):
         dst_np = np.array([[0,0], [0, 480], [360, 0], [360,480]], dtype = np.float32)
         
         M = cv2.getPerspectiveTransform(edge_np, dst_np)
-        result = cv2.warpPerspective(img2, M = M, dsize = (360, 480))
+        result = cv2.warpPerspective(img, M = M, dsize = (360, 480))
         kernel = np.ones((3,3), np.uint8)
-        result4 = cv2.erode(result, kernel, iterations = 1)
+        result = cv2.erode(result, kernel, iterations = 1)
         # result2 = cv2.rectangle(result, (0, 20), (60, 90), (0, 0, 255), 3)
         # result2 = cv2.rectangle(result2, (0, 90), (50, 140), (0, 0, 255), 3)
 
         # result2 = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
         # ret, result3 = cv2.threshold(result2, 200, 255, 0), pattern_img4
         # result3 = cv2.erode(result3, kernel, iterations = 3)
-        # result4 = cv2.bitwise_not(result)
+        result4 = cv2.bitwise_not(result)
 
         # mask2 = np.zeros((200, 350))
         # cv2.rectangle(mask, (100, 0), (520, 340), (255, 255, 255), -1)
@@ -177,24 +167,13 @@ cap.set(4, 1080)
 while True:
     success, img2 = cap.read()
     imgOriginal = img2.copy()
-    img3, img2, imgOriginal = preprocess_img(img2, drawContour = True, drawMask = True)
+    img3, img2 = preprocess_img(img2, drawContour = True)
 
 
-    cv2.imshow('simg2', img3)
-    result = extract_card(img3, img2)
+    cv2.imshow('simg2', img2)
+    result = extract_card(img3)
     # print(img_card)
     cv2.imshow('Card', result)
-    # cv2.imshow('car_pattern', img_card)
-
-    id = findID(result, desList, 0)
-
-    if id != -1:
-        print(classNames[id])
-        cv2.putText(imgOriginal, classNames[id], (960, 300), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
-
-    cv2.imshow('OriginalImage', imgOriginal)
-    # Find descriptor of webcam image
-
 
     cv2.waitKey(1)
 
