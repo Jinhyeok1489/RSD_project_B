@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os  # To read image and find
+import math as m
 
 """
 Main reference
@@ -51,31 +52,74 @@ def findID(img, desList, threshold = 0):
     return finalVal
 
 def solving_vertex(pts):
+    """
+    Compute points order for projection
+    *INPUT:
+            pts: points
+    *OUTPUT:
+            points:     ordered points
+            ceneter:    center of point
+    """
     points = np.zeros((4,2), dtype= "uint32") #x,y쌍이 4개 쌍이기 때문
     s = pts.sum(axis = 1)
-    points[0] = pts[np.argmin(s)] #좌상
-    points[3] = pts[np.argmax(s)] #우하
+    points[0] = pts[np.argmin(s)] # left upper
+    points[3] = pts[np.argmax(s)] # right below
     #원점 (0,0)은 맨 왼쪽 상단에 있으므로, y-x의 값이 가장 작으면 우상의 꼭짓점 / y-x의 값이 가장 크면 좌하의 꼭짓점
     diff = np.diff(pts, axis = 1)
-    points[2] = pts[np.argmin(diff)] #우상
-    points[1] = pts[np.argmax(diff)] #좌하
-    # src.append(points[0])
-    # src.append(points[1])
-    # src.append(points[2])
-    # src.append(points[3])
+    points[2] = pts[np.argmin(diff)] # right upper
+    points[1] = pts[np.argmax(diff)] # left below
 
-    return points
+    # print("points: ", points)
 
-def preprocess_img(img, drawContour, drawMask):
+    garo = np.linalg.norm(points[0]-points[2])*m.sqrt(1080/1920)
+    sero = np.linalg.norm(points[0]-points[1])
+
+    print("sero: ", sero)
+    print("garo: " , garo)
+
+    if sero > garo:
+        print("aaaaaa")
+        temp = np.zeros((4,2), dtype= "uint32")
+
+        temp[0] = points[2]
+        temp[1] = points[0]
+        temp[2] = points[3]
+        temp[3] = points[1]
+        points = temp        
+        # temp[0] = points[1]
+        # temp[1] = points[3]
+        # temp[2] = points[2]
+        # temp[3] = points[0]
+
+
+        # points = temp
+
+    center = (points[0]+points[1]+points[2]+points[3])/4
+
+    center = (int(round(center[0])), int(round(center[1])))
+
+    print("Center: ", center)
+
+    return points, center
+
+def preprocess_img(img, drawContour, drawMask, K_mat):
     img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     mask = np.zeros_like(img2)
     # cv2.rectangle(mask, (100, 0), (520, 340), (255, 255, 255), -1)
     # cv2.rectangle(mask, (600, 200), (1320, 680), (255, 255, 255), -1)
-    start = (350, 200)
-    end = (1470, 780)
+    hh = 0.35
+    start = [-0.1, -0.1]
+    end = [0.1, 0.1]
+    start_px = position_to_pixel(K_mat, start, hh)
+    end_px = position_to_pixel(K_mat, end, hh) 
+    print(start_px[0,0])
 
-    cv2.rectangle(mask, start, end , (255, 255, 255), -1)
+    start_pt = (int(start_px[0,0]), int(start_px[1,0]))
+    end_pt = (int(end_px[0,0]), int(end_px[1,0]))
+    print(start_pt)
+
+    cv2.rectangle(img = mask, pt1 = start_pt, pt2 = end_pt, color = (255, 255, 255), thickness =-1)
 
     masked = cv2.bitwise_and(img2, mask)    
 
@@ -87,7 +131,9 @@ def preprocess_img(img, drawContour, drawMask):
             cv2.drawContours(img, [cnt], 0, (255, 0, 0), 3)
 
     if drawMask == True:
-        cv2.rectangle(img, start, end, (255, 0, 0), 3)
+        cv2.rectangle(img = img, pt1 = start_pt, pt2 = end_pt, color = (0, 0, 255), thickness = 3)
+        cv2.putText(img, 'Workspace', start_pt, cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
+
 
     # img3:     thresholded img
     # img2:     grayscale img
@@ -102,12 +148,15 @@ def extract_card(img, img2):
     """
     result4 = cv2.resize(img2, dsize=(360,480), interpolation = cv2.INTER_AREA)
     # pattern_img = result[0:80, 0:60]
+    center =(0,0)
+    isContour = False
     try:
         contours, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # print("len of contours: ", len(contours))
         # aaa = np.zeros((len(contours), 4, 2))
         # print(contours)
         ctr = contours[0]
+        isContour = True
         # print(len(contours))
         # print(ctr)
         # ctr = ctr_list[0, :, :]
@@ -117,7 +166,7 @@ def extract_card(img, img2):
         # print(len(approx))
         edge = approx.reshape(4,2)
         # print(edge)
-        pts = solving_vertex(edge)
+        pts, center = solving_vertex(edge)
         edge_np = np.array(pts, dtype = np.float32)
 
         dst_np = np.array([[0,0], [0, 480], [360, 0], [360,480]], dtype = np.float32)
@@ -143,11 +192,112 @@ def extract_card(img, img2):
     except:
         # result4 = np.zeros((480, 360))
         pass
-    return result4
+    return result4, center, isContour
+
+def position_to_pixel(K_mat, pose, z):
+    """
+    Transform position to pixel
+    * Input:
+                K_mat:  camera intrinsics
+                pose:   desired position (given as x, y)
+                z:      fixed camera
+    * Output:
+                pixel:  u,v piexel information
+    """
+    pose2 = np.hstack((pose, z))
+    temp = np.reshape(pose2, (3,1))
+    temp2 = K_mat@temp/z  # [u, v, 1]^T
+    pixel = temp2[0:2]
+
+    pixel[0] = int(m.floor(pixel[0]))
+    pixel[1] = int(m.floor(pixel[1]))
+
+    return pixel
+
+def pixel_to_position(K_mat, pixel, z):
+    """
+    Transform pixel to position
+    * Input:
+                K_mat:  camera intrinsics
+                pixel:  current pixel (given as u, v)
+                z:      fixed camera height
+    * Output:
+                pose:   x,y position
+    """
+    pixel2 = np.hstack((pixel, 1))
+    temp = np.reshape(pixel2, (3,1))
+    # print("temp111: ", temp)
+    # print("inv111: ", np.linalg.inv(K_mat))
+    # print("z111: ", z)
+    temp2 = np.linalg.inv(K_mat)@temp*z
+
+    pose = temp2[0:2]
+
+    return pose
+
+def cam_to_robot(dst_cr):
+    """
+    Compute transformation matrix between camera and robot
+    * Input:
+                dst_cr:     distance between robot and camera
+    * Output:
+                trans_mat:  4x4 transformation matrix
+    """
+    rot1 = np.array([[-1, 0, 0, 0],[0, -1, 0, 0],
+                    [0, 0, 1, 0],[0, 0, 0, 1]])
+    trans1 = np.array([[1, 0, 0, 0],[0, 1, 0, -dst_cr],
+                        [0, 0, 1, 0],[0, 0, 0, 1]])
+
+    trans_mat = rot1@trans1
+
+    return trans_mat
+
+def pose_to_mat(pose):
+    """
+    Compute transformation from robot
+    * Input:
+                pose:       desired pose
+    * Output:
+                trans_mat:  transformed mat
+    """
+    x = pose[0]
+    y = pose[1]
+
+    trans_mat = np.array([[1, 0, 0, x], [0, 1, 0, y], 
+                        [0, 0, 1, 0], [0, 0, 0, 1]])
+
+    return trans_mat
+
+def pixel_from_robot(trans, pixel, height, dist):
+    """
+    Compute robot position from pixel
+    * Input:
+                trans:          camera intrinsics
+                pixel:          pixel given as u, v
+                height:         fixed height (camera)
+                dist:           distance between robot base and camera
+    * Output:
+                pos_robot:           position relative to robot's base
+    """
+    pos_cam = pixel_to_position(trans, pixel, height)
+    
+    pos_cam2 = pose_to_mat(pos_cam)
+    trans = cam_to_robot(dist)
+
+    trans_robot = trans@pos_cam2
+
+
+
+    pos_robot = trans_robot[0:2, 3]
+    return pos_robot
+
 
 path = 'Card_Imgs/Cards'
 # orb = cv2.ORB_create(nfeatures = 1000)
 detector = cv2.xfeatures2d.SIFT_create()
+aa = np.load('camera_intrinsics/D.npy')
+trans = np.load('camera_intrinsics/K.npy')
+
 
 #### Import Images
 images = []
@@ -177,23 +327,25 @@ cap.set(4, 1080)
 while True:
     success, img2 = cap.read()
     imgOriginal = img2.copy()
-    img3, img2, imgOriginal = preprocess_img(img2, drawContour = True, drawMask = True)
+    img3, img2, imgOriginal = preprocess_img(img2, drawContour = True, drawMask = True, K_mat = trans)
 
 
     cv2.imshow('simg2', img3)
-    result = extract_card(img3, img2)
-    # print(img_card)
-    cv2.imshow('Card', result)
-    # cv2.imshow('car_pattern', img_card)
+    result, center, isContour = extract_card(img3, img2)
+    if isContour == True:
+        cv2.circle(imgOriginal, center, 20, (0, 0, 255), thickness = 3)
 
-    id = findID(result, desList, 0)
+        cv2.imshow('Card', result)
+        # cv2.imshow('car_pattern', img_card)
 
-    if id != -1:
-        print(classNames[id])
-        cv2.putText(imgOriginal, classNames[id], (960, 300), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
+        id = findID(result, desList, 0)
 
-    cv2.imshow('OriginalImage', imgOriginal)
-    # Find descriptor of webcam image
+        if id != -1:
+            print(classNames[id])
+            cv2.putText(imgOriginal, classNames[id], (960, 300), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
+
+        cv2.imshow('OriginalImage', imgOriginal)
+        # Find descriptor of webcam image
 
 
     cv2.waitKey(1)
