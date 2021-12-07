@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 import cv2
 import numpy as np
 import os  # To read image and find
@@ -193,7 +195,7 @@ def extract_card(img, img2, K_mat):
         # print("edge: ", edge)
         pts, center = solving_vertex(edge, K_mat)
         edge_np = np.array(pts, dtype = np.float32)
-        print("edge_np: ", edge_np)
+        # print("edge_np: ", edge_np)
         dst_np = np.array([[0,0], [0, 480], [360, 0], [360,480]], dtype = np.float32)
         
         M = cv2.getPerspectiveTransform(edge_np, dst_np)
@@ -344,7 +346,7 @@ print(classNames)
 desList = findDes(images)
 print(len(desList))
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
 cap.set(15, 5)
 cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
 cap.set(3, 1920)
@@ -360,7 +362,7 @@ while True:
     img3, img2, imgOriginal = preprocess_img(img2, drawContour = True, drawMask = True, K_mat = trans)
 
 
-    cv2.imshow('simg2', img3)
+    # cv2.imshow('simg2', img3)
     result, center, isContour = extract_card(img3, img2, trans)
     if isContour == True:
         cv2.circle(imgOriginal, center, 20, (0, 0, 255), thickness = 3)

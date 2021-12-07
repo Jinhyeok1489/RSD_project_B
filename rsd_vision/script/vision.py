@@ -151,7 +151,7 @@ for cl in myList:
     imgCur = cv2.imread(f'{path}/{cl}', 0) # Import image as greyscale
     images.append(imgCur)
     classNames.append(os.path.splitext(cl)[0])
-print(classNames)
+print(classNames)저장
 
 
 desList = findDes(images)
