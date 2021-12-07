@@ -43,7 +43,6 @@ def pixel_to_position(K_mat, pixel, z):
     temp2 = np.linalg.inv(K_mat)@temp*z
 
     pose = temp2[0:2]
-
     return pose
 
 def cam_to_robot(dst_cr):
@@ -94,12 +93,13 @@ def pixel_from_robot(trans, pixel, height, dist):
     
     pos_cam2 = pose_to_mat(pos_cam)
     trans = cam_to_robot(dist)
-
     trans_robot = trans@pos_cam2
 
-
-
-    pos_robot = trans_robot[0:2, 3]
+    pos_robot22 = trans_robot[0:2, 3]
+    pos1 = pos_robot22[0][0]
+    pos2 = pos_robot22[1][0]
+    pos_robot = [pos1, pos2]
+    # print("pos_robot: ", pos_robot)
     return pos_robot
 
 

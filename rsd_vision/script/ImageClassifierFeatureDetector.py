@@ -23,7 +23,6 @@ def findID(img, desList, threshold = 0):
     # kp2, des2 = orb.detectAndCompute(img, None)
 
     kp2, des2 = detector.detectAndCompute(img, None)
-    # print("len kp2: ", len(kp2))
     bf = cv2.BFMatcher()
     matchList = []
     finalVal = -1
@@ -51,7 +50,7 @@ def findID(img, desList, threshold = 0):
     print(finalVal)
     return finalVal
 
-def solving_vertex(pts):
+def solving_vertex(pts, K_mat):
     """
     Compute points order for projection
     *INPUT:
@@ -69,23 +68,48 @@ def solving_vertex(pts):
     points[2] = pts[np.argmin(diff)] # right upper
     points[1] = pts[np.argmax(diff)] # left below
 
-    # print("points: ", points)
+    pos0 = pixel_to_position(K_mat, points[0], 0.35) ### Tuning parameter z =0.35
+    pos1 = pixel_to_position(K_mat, points[1], 0.35)
+    pos2 = pixel_to_position(K_mat, points[2], 0.35)
+    pos3 = pixel_to_position(K_mat, points[3], 0.35)
 
-    garo = np.linalg.norm(points[0]-points[2])*m.sqrt(1080/1920)
-    sero = np.linalg.norm(points[0]-points[1])
+    garo = m.sqrt((pos0[0,0]-pos2[0,0])**2+(pos0[1,0]-pos2[1,0])**2)
+    # garo = norm(abs(pos0-pos2))
+    sero = m.sqrt((pos0[0,0]-pos1[0,0])**2+(pos0[1,0]-pos1[1,0])**2)
 
-    print("sero: ", sero)
-    print("garo: " , garo)
+    if sero < garo:
+        temp = np.zeros((4,2), dtype = "uint32")
+        if points[0,0] > points[1,0]: # Right rotated, large angle
+            temp[0] = points[2]
+            temp[1] = points[0]
+            temp[2] = points[3]
+            temp[3] = points[1]
 
-    if sero > garo:
-        print("aaaaaa")
-        temp = np.zeros((4,2), dtype= "uint32")
+            print("case1")
+            print("Type: ", type(temp))
 
-        temp[0] = points[2]
-        temp[1] = points[0]
-        temp[2] = points[3]
-        temp[3] = points[1]
-        points = temp        
+            points = temp
+        else: # Left rotated, large angle
+            temp[0] = points[1]
+            temp[1] = points[3]
+            temp[2] = points[0]
+            temp[3] = points[2]
+
+            print("case2")
+            print("Type: ", type(temp))
+
+
+            points = temp
+
+    else:
+        if points[2,0] > points[3,0]: # Right rotated, small angle
+            points = points
+        else: # Left rotated, small angle
+            points = points
+
+
+
+        # points = temp        
         # temp[0] = points[1]
         # temp[1] = points[3]
         # temp[2] = points[2]
@@ -94,11 +118,14 @@ def solving_vertex(pts):
 
         # points = temp
 
+    cv2.circle(imgOriginal, points[0], 10, (0, 0, 255), thickness = 3)
+    cv2.circle(imgOriginal, points[1], 10, (0, 255, 0), thickness = 3)
+    cv2.circle(imgOriginal, points[2], 10, (255, 0, 0), thickness = 3)
+    cv2.circle(imgOriginal, points[3], 10, (255, 255, 0), thickness = 3)
+
+
     center = (points[0]+points[1]+points[2]+points[3])/4
-
     center = (int(round(center[0])), int(round(center[1])))
-
-    print("Center: ", center)
 
     return points, center
 
@@ -140,7 +167,7 @@ def preprocess_img(img, drawContour, drawMask, K_mat):
     # img:      original img
     return img3, img2, img
 
-def extract_card(img, img2):
+def extract_card(img, img2, K_mat):
     """
     * Input:
             img: binary_img
@@ -157,24 +184,23 @@ def extract_card(img, img2):
         # print(contours)
         ctr = contours[0]
         isContour = True
-        # print(len(contours))
-        # print(ctr)
+
         # ctr = ctr_list[0, :, :]
         epsilon = cv2.arcLength(ctr, True)*0.02
         approx = cv2.approxPolyDP(ctr, epsilon, True)
 
-        # print(len(approx))
         edge = approx.reshape(4,2)
-        # print(edge)
-        pts, center = solving_vertex(edge)
+        # print("edge: ", edge)
+        pts, center = solving_vertex(edge, K_mat)
         edge_np = np.array(pts, dtype = np.float32)
-
+        print("edge_np: ", edge_np)
         dst_np = np.array([[0,0], [0, 480], [360, 0], [360,480]], dtype = np.float32)
         
         M = cv2.getPerspectiveTransform(edge_np, dst_np)
-        result = cv2.warpPerspective(img2, M = M, dsize = (360, 480))
+        # result4 = cv2.warpPerspective(img2, M = M, dsize = (360, 480))
+        result4 = cv2.warpPerspective(img2, M = M, dsize = (360, 480))        
         kernel = np.ones((3,3), np.uint8)
-        result4 = cv2.erode(result, kernel, iterations = 1)
+        # result4 = cv2.erode(result, kernel, iterations = 1)
         # result2 = cv2.rectangle(result, (0, 20), (60, 90), (0, 0, 255), 3)
         # result2 = cv2.rectangle(result2, (0, 90), (50, 140), (0, 0, 255), 3)
 
@@ -286,9 +312,10 @@ def pixel_from_robot(trans, pixel, height, dist):
 
     trans_robot = trans@pos_cam2
 
-
-
-    pos_robot = trans_robot[0:2, 3]
+    pos_robot22 = trans_robot[0:2, 3]
+    pos1 = pos_robot22[0][0]
+    pos2 = pos_robot22[1][0]
+    pos_robot = [pos1, pos2]
     return pos_robot
 
 
@@ -323,6 +350,9 @@ cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
 cap.set(3, 1920)
 cap.set(4, 1080)
 
+height = 0.35
+dist = 0.32
+
 #### While loop
 while True:
     success, img2 = cap.read()
@@ -331,9 +361,12 @@ while True:
 
 
     cv2.imshow('simg2', img3)
-    result, center, isContour = extract_card(img3, img2)
+    result, center, isContour = extract_card(img3, img2, trans)
     if isContour == True:
         cv2.circle(imgOriginal, center, 20, (0, 0, 255), thickness = 3)
+        robot_pose = pixel_from_robot(trans, center, height, dist)
+
+        print('Robot pose: ', robot_pose)
 
         cv2.imshow('Card', result)
         # cv2.imshow('car_pattern', img_card)
