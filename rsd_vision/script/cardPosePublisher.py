@@ -67,10 +67,10 @@ def solving_vertex(pts, K_mat):
     points[2] = pts[np.argmin(diff)] # right upper
     points[1] = pts[np.argmax(diff)] # left below
 
-    pos0 = pixel_to_position(K_mat, points[0], 0.37) ### Tuning parameter z =0.35
-    pos1 = pixel_to_position(K_mat, points[1], 0.37)
-    pos2 = pixel_to_position(K_mat, points[2], 0.37)
-    pos3 = pixel_to_position(K_mat, points[3], 0.37)
+    pos0 = pixel_to_position(K_mat, points[0], 0.33) ### Tuning parameter z =0.35
+    pos1 = pixel_to_position(K_mat, points[1], 0.33)
+    pos2 = pixel_to_position(K_mat, points[2], 0.33)
+    pos3 = pixel_to_position(K_mat, points[3], 0.33)
 
     garo = m.sqrt((pos0[0,0]-pos2[0,0])**2+(pos0[1,0]-pos2[1,0])**2)
     # garo = norm(abs(pos0-pos2))
@@ -131,18 +131,23 @@ def solving_vertex(pts, K_mat):
 def preprocess_img(img, drawContour, drawMask, K_mat):
     img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    kernel_size_row = 3
-    kernel_size_col = 3
     kernel = np.ones((3, 3), np.uint8)
-    img4 = cv2.dilate(img2, kernel, iterations = 15)
+    img4 = cv2.dilate(img2, kernel, iterations = 20)
+    kernel2 = np.ones((51, 51), np.uint8)
+    img4 =cv2.morphologyEx(img4, cv2.MORPH_CLOSE, kernel2)
 
+
+
+    # Kernel 3,3 iteration 8
+
+    # cv2.imshow('dilated', img4)
 
     mask = np.zeros_like(img4)
     # cv2.rectangle(mask, (100, 0), (520, 340), (255, 255, 255), -1)
     # cv2.rectangle(mask, (600, 200), (1320, 680), (255, 255, 255), -1)
-    hh = 0.37
-    start = [-0.1, 0]
-    end = [0.1, 0.1]
+    hh = 0.33
+    start = [-0.0333, -0.001-0.03]
+    end = [0.09, 0.1-0.03]
     start_px = position_to_pixel(K_mat, start, hh)
     end_px = position_to_pixel(K_mat, end, hh) 
     # print(start_px[0,0])
@@ -156,7 +161,7 @@ def preprocess_img(img, drawContour, drawMask, K_mat):
     masked = cv2.bitwise_and(img4, mask)    
 
     # frame_g = cv2.cvtColor(masked, cv2.COLOR_RGB2GRAY)
-    ret, img3 = cv2.threshold(masked, 220, 255, 0)
+    ret, img3 = cv2.threshold(masked, 210, 255, 0)
     if drawContour == True:
         contours, hierarchy = cv2.findContours(img3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in contours:
@@ -164,8 +169,11 @@ def preprocess_img(img, drawContour, drawMask, K_mat):
 
     if drawMask == True:
         cv2.rectangle(img = img, pt1 = start_pt, pt2 = end_pt, color = (0, 0, 255), thickness = 3)
-        cv2.putText(img, 'Workspace', start_pt, cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
+        cv2.putText(img, 'ROI', start_pt, cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255),5)
+        
+        # cv2.putText(img, 'Dia' ())
 
+    # cv2.imshow('aaaa', img4)
 
     # img3:     thresholded img
     # img2:     grayscale img
@@ -190,9 +198,13 @@ def extract_card(img, img2, K_mat):
         ctr = contours[0]
         isContour = True
 
-        # ctr = ctr_list[0, :, :]
-        epsilon = cv2.arcLength(ctr, True)*0.02
-        approx = cv2.approxPolyDP(ctr, epsilon, True)
+        # # ctr = ctr_list[0, :, :]epsi
+        # epsilon = cv2.arcLength(ctr, True)*0.2
+        # approx = cv2.approxPolyDP(ctr, epsilon, True)
+
+        rect = cv2.minAreaRect(ctr)
+        box = cv2.boxPoints(rect)
+        approx = np.int0(box)
 
         edge = approx.reshape(4,2)
         # print("edge: ", edge)
@@ -237,12 +249,15 @@ def position_to_pixel(K_mat, pose, z):
     """
     pose2 = np.hstack((pose, z))
     temp = np.reshape(pose2, (3,1))
-    aa = 20/27
-    # aa = 1
+    # aa = 20/27
+    aa = 1
     temp2 = K_mat@temp/z*aa  # [u, v, 1]^T
     pixel = temp2[0:2]
 
-    pixel[0] = int(m.floor(pixel[0]))+250
+    # pixel[0] = int(m.floor(pixel[0]))+250
+    # pixel[1] = int(m.floor(pixel[1]))
+
+    pixel[0] = int(m.floor(pixel[0]))
     pixel[1] = int(m.floor(pixel[1]))
 
     return pixel
@@ -259,12 +274,12 @@ def pixel_to_position(K_mat, pixel, z):
     """
     pixel2 = np.hstack((pixel, 1))
     temp = np.reshape(pixel2, (3,1))
-    temp[0,0] = temp[0,0]-250
+    temp[0,0] = temp[0,0]
     # print("temp111: ", temp)
     # print("inv111: ", np.linalg.inv(K_mat))
     # print("z111: ", z)
-    aa = 27/20
-    # aa = 1
+    # aa = 27/20
+    aa = 1
     temp2 = np.linalg.inv(K_mat)@temp*z*aa
 
 
@@ -330,13 +345,18 @@ def pixel_from_robot(trans, pixel, height, dist):
     pos_robot = [pos1, pos2]
     return pos_robot
 
+
+
 if __name__ == '__main__':
     path = 'Card_Imgs/Cards'
     # orb = cv2.ORB_create(nfeatures = 1000)
     detector = cv2.xfeatures2d.SIFT_create()
     aa = np.load('camera_intrinsics/D.npy')
     trans = np.load('camera_intrinsics/K.npy')
-
+    K = np.array([[1175.02, 0.0, 937.44],
+                  [0.0, 1174.38, 556.02],
+                  [0.0, 0.0, 1.0]])
+    trans = K
 
     #### Import Images
     images = []
@@ -363,7 +383,7 @@ if __name__ == '__main__':
     cap.set(4, 1080)
 
     height = 0.37
-    dist = 0.32
+    dist = 0.35
 
     pub = rospy.Publisher('card_pose', Card_pose, queue_size = 10)
     rospy.init_node('pose_publisher', anonymous = True)
@@ -373,7 +393,7 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         success, img2 = cap.read()
         imgOriginal = img2.copy()
-        img3, img2, imgOriginal = preprocess_img(img2, drawContour = True, drawMask = True, K_mat = trans)
+        img3, img2, imgOriginal = preprocess_img(img2, drawContour = False, drawMask = True, K_mat = trans)
 
 
         # cv2.imshow('simg2', img3)

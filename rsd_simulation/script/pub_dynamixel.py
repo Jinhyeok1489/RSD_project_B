@@ -6,6 +6,11 @@ import math as m
 import time
 import pandas as pd
 import numpy as np
+import rospy
+import threading
+
+from rsd_vision.msg import Card_pose
+
 
 if os.name == 'nt':
     import msvcrt
@@ -118,7 +123,7 @@ def get_rad_offset(desired_angle, offset, min_angle, max_angle):
     """
     rad_value = (desired_angle + offset)
 
-    # print("Angle: ", rad_value*180/m.pi)
+    print("Angle: ", rad_value*180/m.pi)
 
     if rad_value < min_angle:
         raise Exception("Angle is too small...")
@@ -210,191 +215,556 @@ def ikine_prrp(pose, l1, l2):
     
     return vals
 
-# DYNAMIXEL Protocol Version (1.0 / 2.0)
-# https://emanual.robotis.com/docs/en/dxl/protocol2/
-PROTOCOL_VERSION = 2.0
+def cubic(p0, pf , tf, t_step):
+    """
+    Compute cubic cartesian trajectory between starting point and end point
+    * Input:
+            p0:     starting point
+            pf:     end point
+            tf:     final time
+    * Output:
+            p:      linearized trajectory
+    """
+    pi = np.array(p0)
+    pf = np.array(pf)
 
-BAUDRATE = 1000000
+    L = np.linalg.norm(pi-pf)
+    t = np.arange(0, tf+t_step, t_step)
+    p = np.zeros((t.size, 2))
 
-# Dynamixel with protocol version 2
-DXL_R1_ID = 1
-DXL_R2_ID = 0
-DXL_P1_ID = 3
-DXL_P2_ID = 2
-DXL_MAXIMUM_POSITION_VALUE = 4095
-DXL_MINIMUM_POSITION_VALUE = 0
+    sigma =     3*L*pow(t,2)/pow(tf, 2)-2*L*pow(t,3)/pow(tf,3)
+    d_sigma =   6*L*t/pow(tf,2)-L*pow(t,2)/pow(tf,3)
+    dd_sigma =  6*L/pow(tf,2)-12*L*t/pow(tf,3)
 
+    for i in range(t.size):
+        p[i] = pi + sigma[i]*(pf-pi)/L
 
-# Use the actual port assigned to the U2D2.
-# ex) Windows: "COM*", Linux: "/dev/ttyUSB*", Mac: "/dev/tty.usbserial-*"
-DEVICENAME = '/dev/ttyUSB0'
+    return p
 
-# Initialize PortHandler instance
-# Set the port path
-# Get methods and members of PortHandlerLinux or PortHandlerWindows
-portHandler = PortHandler(DEVICENAME)
+def cubic_joint(q0, qf, v0, vf, tf, t_step):
+    a0 = q0
+    a1 = v0
+    a2 = 3*(qf-q0)/pow(tf,2)-2*v0/tf-vf/tf
+    a3 = -2*(qf-q0)/pow(tf,3)+(vf+v0)/pow(tf,2)
 
-# Initialize PacketHandler instance
-# Set the protocol version
-# Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
-packetHandler = PacketHandler(PROTOCOL_VERSION)
+    t = np.arange(0, tf+t_step, t_step)
+    theta = a0+a1*t+a2*pow(t,2)+a3*pow(t,3)
 
-# Addreses for motor control
+    return theta
 
-# XM-series
-ADDR_XM_GOAL_POSITION = 116
-ADDR_XM_TORQUE_ENABLE = 64
-ADDR_XM_CURR_POSITION = 132
-ADDR_XM_OPERATION = 11
+def callback(data):
+    global card_pose_x
+    global card_pose_y
+    global card_name
+    # rospy.loginfo("Current card pose: %s", data.data)
+    card_pose_x = data.pos_x
+    card_pose_y = data.pos_y
+    card_name = data.card_name
 
-TORQUE_ENABLE = 1
-TORQUE_DISABLE = 0
-
-# Open port 1 (Port 1: MX-64AT)
-if portHandler.openPort():
-    print("Succeeded to open the port")
-else:
-    print("Failed to open the port")
-    print("Press any key to terminate...")
-    getch()
-    quit()
-# Set port baudrate1 (Port1: MX-64AT)
-if portHandler.setBaudRate(BAUDRATE):
-    print("Succeeded to change the baudrate")
-else:
-    print("Failed to change the baudrate")
-    print("Press any key to terminate...")
-    getch()
-    quit()
-
-# mat_mani = np.array([DXL_R1_ID, DXL_R2_ID ,DXL_P1_ID, DXL_P2_ID])
-mat_mani = np.array([DXL_R1_ID, DXL_R2_ID])
-for i in range(len(mat_mani)):
-    Disable_torque(mat_mani[i])
+    # rospy.loginfo("CardName: %s", card_name)
 
 
-# Set operating mode to extended position control mode - motor R1
-dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_R1_ID, ADDR_XM_OPERATION, 4)
-if dxl_comm_result != COMM_SUCCESS:
-    print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
-elif dxl_error != 0:
-    print("%s" % packetHandler.getRxPacketError(dxl_error))
-else:
-    print("Operating mode changed to extended position control mode.")
+    # rospy.loginfo("Card pose: (%s, %s)", card_pose_x, card_pose_y)
 
-# Set operating mode to extended position control mode - motor R2
-dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_R2_ID, ADDR_XM_OPERATION, 4)
-if dxl_comm_result != COMM_SUCCESS:
-    print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
-elif dxl_error != 0:
-    print("%s" % packetHandler.getRxPacketError(dxl_error))
-else:
-    print("Operating mode changed to extended position control mode.")
+    # rospy.loginfo("Data data: %s", card_pose)
 
-# Set operating mode to extended position control mode - motor P1
-dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_P1_ID, ADDR_XM_OPERATION, 4)
-if dxl_comm_result != COMM_SUCCESS:
-    print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
-elif dxl_error != 0:
-    print("%s" % packetHandler.getRxPacketError(dxl_error))
-else:
-    print("Operating mode changed to extended position control mode.")
-# Set operating mode to extended position control mode - motor P2
-dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_P2_ID, ADDR_XM_OPERATION, 4)
-if dxl_comm_result != COMM_SUCCESS:
-    print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
-elif dxl_error != 0:
-    print("%s" % packetHandler.getRxPacketError(dxl_error))
-else:
-    print("Operating mode changed to extended position control mode.")
-
-
-LEN_GOAL_POSITION1 = 4
-LEN_PRESENT_POSITION1 = 4
-LEN_GOAL_POSITION2 = 4
-LEN_PRESENT_POSITION2 = 4
-# Initialize GroupSyncWrite instance
-# Set as operation modes
-
-
-groupSyncWrite = GroupSyncWrite(portHandler, packetHandler, ADDR_XM_GOAL_POSITION, LEN_GOAL_POSITION1)
-# Initialize GroupSyncRead instace for Present Position
-groupSyncRead = GroupSyncRead(portHandler, packetHandler, ADDR_XM_CURR_POSITION, LEN_PRESENT_POSITION1)
-
-print(dxl_comm_result)
-
-
-mat_mani = np.array([DXL_R1_ID, DXL_R2_ID])
-for i in range(len(mat_mani)):
-    Enable_torque(mat_mani[i])
-
-init_time = time.time()
-
-l1 = 0.22 # Firt link length
-l2 = 0.20 # second link length
-
-pos = np.array([0.27, 0.0])
-
-print(ikine_prrp(pos, l1, l2)[0])
-
-angs = ikine_prrp(pos, l1, l2)
-ang1 = angs[0]
-ang2 = angs[1]
-
-min_arr = np.array([20, -80])*m.pi/180
-max_arr = np.array([250, 150])*m.pi/180
-
-offset_arr = np.array([135, 35])*m.pi/180
-
-
-kine = fkine_prrp(0.22, 0.2, ang1[0], ang1[1])
-print("Kine: ",kine[0:2, 3])
-
-home = np.array([0, 0])
-desired_arr = ang2
-
-th1 = np.linspace(home[0], desired_arr[0], num = 50, endpoint = True)
-th2 = np.linspace(home[1], desired_arr[1], num = 50, endpoint = True)
-
-th1_1 = np.linspace(desired_arr[0], home[0], num = 50, endpoint = True)
-th2_1 = np.linspace(desired_arr[1], home[1], num = 50, endpoint = True)
-
-th1_2 = np.linspace(m.pi/2, 0, num = 50, endpoint = True)
-th2_2 = np.linspace(m.pi/2, 0, num = 50, endpoint = True)
-
-# get_rad_offset(desired_arr[0], offset_arr[0], min_arr[0], max_arr[0])
-
-print("th1: ", th1)
-
-print("th2: ", th2)
-# get_rad_offset(desired_arr[1], offset_arr[1], min_arr[1], max_arr[1])
-
-index = 0
-while(1):
-    if index == 49:
-        break
-
-    th_arr = np.array([th1[index], th2[index]])
-    # th_arr = np.array([th1_1[index], th2_1[index]])
-    # th_arr = np.array([th1_1[index], th2_1[index]])
-    # print("th_arr: ", th_arr)
-    for i in range(len(mat_mani)):
-        # temp = get_desired_rad(ang1[i])
-        temp = get_rad_offset(th_arr[i], offset_arr[i], min_arr[i], max_arr[i])
-        # print("th_arr[0]: ", th_arr[i])
-        # print("th_arr[1]: ", th_arr[i])
-        # temp = get_desired_rad(0)
-        Syncwrite_param(mat_mani[i], temp)
-    Syncwrite_goal_position()   
-    index = index + 1 
-    time.sleep(0.05)
+def readCams():
+    """
+    * Subscribe camera data
+    """
+    rospy.Subscriber('card_pose', Card_pose, callback)
     
-# mat_mani = np.array([DXL_R1_ID, DXL_R2_ID ,DXL_P1_ID, DXL_P2_ID])
-# mat_mani = np.array([DXL_R1_ID, DXL_R2_ID])
-# for i in range(len(mat_mani)):
-#     Disable_torque(mat_mani[i])
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    rospy.init_node('test_move', anonymous=True)
+
+    listener = threading.Thread(target = readCams)
+    listener.start()
 
 
 
-# Close port
-portHandler.closePort()
+    # DYNAMIXEL Protocol Version (1.0 / 2.0)
+    # https://emanual.robotis.com/docs/en/dxl/protocol2/
+    PROTOCOL_VERSION = 2.0
+
+    BAUDRATE = 1000000
+
+    # Dynamixel with protocol version 2
+    DXL_R1_ID = 1
+    DXL_R2_ID = 0
+    DXL_P1_ID = 3
+    DXL_P2_ID = 2
+    DXL_MAXIMUM_POSITION_VALUE = 4095
+    DXL_MINIMUM_POSITION_VALUE = 0
+
+
+    # Use the actual port assigned to the U2D2.
+    # ex) Windows: "COM*", Linux: "/dev/ttyUSB*", Mac: "/dev/tty.usbserial-*"
+    DEVICENAME = '/dev/ttyUSB1'
+
+    # Initialize PortHandler instance
+    # Set the port path
+    # Get methods and members of PortHandlerLinux or PortHandlerWindows
+    portHandler = PortHandler(DEVICENAME)
+
+    # Initialize PacketHandler instance
+    # Set the protocol version
+    # Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
+    packetHandler = PacketHandler(PROTOCOL_VERSION)
+
+    # Addreses for motor control
+
+    # XM-series
+    ADDR_XM_GOAL_POSITION = 116
+    ADDR_XM_TORQUE_ENABLE = 64
+    ADDR_XM_CURR_POSITION = 132
+    ADDR_XM_OPERATION = 11
+
+    TORQUE_ENABLE = 1
+    TORQUE_DISABLE = 0
+
+    # Open port 1 (Port 1: MX-64AT)
+    if portHandler.openPort():
+        print("Succeeded to open the port")
+    else:
+        print("Failed to open the port")
+        print("Press any key to terminate...")
+        getch()
+        quit()
+    # Set port baudrate1 (Port1: MX-64AT)
+    if portHandler.setBaudRate(BAUDRATE):
+        print("Succeeded to change the baudrate")
+    else:
+        print("Failed to change the baudrate")
+        print("Press any key to terminate...")
+        getch()
+        quit()
+
+    # mat_mani = np.array([DXL_R1_ID, DXL_R2_ID ,DXL_P1_ID, DXL_P2_ID])
+    mat_mani = np.array([DXL_R1_ID, DXL_R2_ID, DXL_P1_ID ,DXL_P2_ID])
+    for i in range(len(mat_mani)):
+        Disable_torque(mat_mani[i])
+
+
+    # Set operating mode to extended position control mode - motor R1
+    dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_R1_ID, ADDR_XM_OPERATION, 4)
+    if dxl_comm_result != COMM_SUCCESS:
+        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
+    elif dxl_error != 0:
+        print("%s" % packetHandler.getRxPacketError(dxl_error))
+    else:
+        print("Operating mode changed to extended position control mode.")
+
+    # Set operating mode to extended position control mode - motor R2
+    dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_R2_ID, ADDR_XM_OPERATION, 4)
+    if dxl_comm_result != COMM_SUCCESS:
+        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
+    elif dxl_error != 0:
+        print("%s" % packetHandler.getRxPacketError(dxl_error))
+    else:
+        print("Operating mode changed to extended position control mode.")
+
+    # Set operating mode to extended position control mode - motor P1
+    dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_P1_ID, ADDR_XM_OPERATION, 4)
+    if dxl_comm_result != COMM_SUCCESS:
+        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
+    elif dxl_error != 0:
+        print("%s" % packetHandler.getRxPacketError(dxl_error))
+    else:
+        print("Operating mode changed to extended position control mode.")
+    # Set operating mode to extended position control mode - motor P2
+    dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, DXL_P2_ID, ADDR_XM_OPERATION, 4)
+    if dxl_comm_result != COMM_SUCCESS:
+        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))  
+    elif dxl_error != 0:
+        print("%s" % packetHandler.getRxPacketError(dxl_error))
+    else:
+        print("Operating mode changed to extended position control mode.")
+
+
+    LEN_GOAL_POSITION1 = 4
+    LEN_PRESENT_POSITION1 = 4
+    LEN_GOAL_POSITION2 = 4
+    LEN_PRESENT_POSITION2 = 4
+    # Initialize GroupSyncWrite instance
+    # Set as operation modes
+
+
+    groupSyncWrite = GroupSyncWrite(portHandler, packetHandler, ADDR_XM_GOAL_POSITION, LEN_GOAL_POSITION1)
+    # Initialize GroupSyncRead instace for Present Position
+    groupSyncRead = GroupSyncRead(portHandler, packetHandler, ADDR_XM_CURR_POSITION, LEN_PRESENT_POSITION1)
+
+    print(dxl_comm_result)
+
+
+    mat_mani = np.array([DXL_R1_ID, DXL_R2_ID, DXL_P1_ID, DXL_P2_ID])
+    for i in range(len(mat_mani)):
+        Enable_torque(mat_mani[i])
+
+    init_time = time.time()
+
+    l1 = 0.22 # Firt link length
+    l2 = 0.20 # second link length
+
+
+    pos = np.array([0.40, 0.05])
+
+    min_arr = np.array([20, -74, -204, 40])*m.pi/180
+    max_arr = np.array([250, 156, 160, 92])*m.pi/180
+
+    offset_arr = np.array([135, 41, -22, 66])*m.pi/180
+
+
+    # kine = fkine_prrp(0.22, 0.2, ang1[0], ang1[1])
+
+
+    # print("Kine: ",kine[0:2, 3])
+
+    home = np.array([0, 0])
+
+    th1_home = 184*m.pi/180 + offset_arr[0]
+    th2_home = 0*m.pi/180 + offset_arr[1]
+    home_kine = fkine_prrp(0.22, 0.2, th1_home, th2_home)
+    pose_home = home_kine[0:2, 3]
+    pose_home[1] = -pose_home[1]
+    # Global variable (from subscriber)
+    card_pose_x = -1.0
+    card_pose_y = -1.0
+    card_name = 'None'
+
+    print("pose_home: ",pose_home)
+
+
+    # th1_2 = np.linspace(m.pi/2, 0, num = 50, endpoint = True)
+    # th2_2 = np.linspace(m.pi/2, 0, num = 50, endpoint = True)
+
+    start = np.array([0.42, 0])
+    end = np.array([0.40, 0.05])
+
+    pp = cubic(start, pose_home, 5, 0.1)
+
+    up = cubic_joint(136, -100, 0, 0, 5, 0.1)*m.pi/180
+    down  = cubic_joint(-100, 136, 0, 0, 5, 0.1)*m.pi/180
+
+    down2 = cubic_joint(-100, 80, 0, 0, 5, 0.1)*m.pi/180
+    up2 = cubic_joint(80, -100, 0, 0, 5, 0.1)*m.pi/180
+
+    # up = np.linspace(136, -100,  num = len(pp))*m.pi/180
+    # down = np.linspace(-100, 136, num = len(pp))*m.pi/180
+
+    upper = -100*m.pi/180
+    lower = 136*m.pi/180
+
+    p2_ori = -19*m.pi/180 # 45 degree -1
+    p2_up = cubic_joint(-19, 25, 0, 0, 5, 0.1)*m.pi/180
+    p2_down = cubic_joint(25, -19, 0, 0, 5, 0.1)*m.pi/180
+
+    print(len(pp))
+
+    index = 0
+
+    # pub = rospy.Publisher('/prrp/joint_states', JointState, latch=True, queue_size=1)
+
+    # rate = rospy.Rate(25)
+
+    while not rospy.is_shutdown():
+        x = input('Command: ')
+        x = int(x)
+        # 0: if start from base 
+        # 1: if start from homing
+        if x == 0:
+            while 1: #  While loop 1: initial to home position
+            
+            
+                if index == len(pp):
+                    break
+                # print("up: ", up)
+                
+                rospy.loginfo("Phase 1-1 - Initial pose to home position(go up)")
+                th_arr = ikine_prrp(pp[0], 0.22, 0.2)
+                # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+                th1 = th_arr[0]
+                th2 = th_arr[1]
+
+                angles = np.append(th2, up2[index])
+                angles = np.append(angles, p2_ori)
+
+                for i in range(len(mat_mani)):
+                    print(i)
+                    temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+
+                    Syncwrite_param(mat_mani[i], temp)
+                Syncwrite_goal_position()   
+                index = index + 1 
+                time.sleep(0.05)
+
+            index = 0
+            while 1: #  While loop 2: initial to home position (Move to homing)
+            
+                if index == len(pp):
+                    break
+                # print("up: ", up)
+                
+                rospy.loginfo("Phase 1-2 - Initial pose to home position(move to homing)")
+                th_arr = ikine_prrp(pp[index], 0.22, 0.2)
+                # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+                th1 = th_arr[0]
+                th2 = th_arr[1]
+
+                angles = np.append(th2, upper)
+                angles = np.append(angles, p2_ori)
+
+                for i in range(len(mat_mani)):
+                    print(i)
+                    temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+
+                    Syncwrite_param(mat_mani[i], temp)
+                Syncwrite_goal_position()   
+                index = index + 1 
+                time.sleep(0.05)
+
+
+
+
+            time.sleep(10.0)
+
+        time.sleep(5.0)
+        index = 0
+        while not rospy.is_shutdown(): # While loop 2: Move
+
+            print("Phase 2 -Move to card")
+            while card_pose_x == -1 and card_pose_y == -1:
+                print("주화입마에 ")
+                pass
+            
+
+            if index == 0:
+                offset = 0.02
+                curr_pose = np.array([-card_pose_y, -card_pose_x + 0.02])
+                rospy.loginfo("Current_pose: %s", curr_pose)
+                pp2 = cubic(pose_home, curr_pose, 5, 0.1)
+                rospy.loginfo("trajectory home to card: %s", pp2)
+                pp2_h = cubic(curr_pose, pose_home, 5, 0.1)
+                print("len pp: ", len(pp), " index: ", index)
+
+                offset_x = -0.03
+
+                base1 = np.array([0.31+offset_x, -0.04 - offset])
+                base2 = np.array([0.31+offset_x, 0.035 - offset])
+                base3 = np.array([0.31+offset_x, 0.10 - offset])
+                base4 = np.array([0.40+offset_x, -0.04 - offset])
+
+                pp_b1 = cubic(curr_pose, base1, 5, 0.1)
+                pp_b2 = cubic(curr_pose, base2, 5, 0.1)
+                pp_b3 = cubic(curr_pose, base3, 5, 0.1)
+                pp_b4 = cubic(curr_pose, base4, 5, 0.1) 
+
+                pp_b1b = cubic(base1, pose_home, 5, 0.1)
+                pp_b2b = cubic(base2, pose_home, 5, 0.1)
+                pp_b3b = cubic(base3, pose_home, 5, 0.1)
+                pp_b4b = cubic(base4, pose_home, 5, 0.1)
+
+                # if 'Dia' in card_name:
+                #     target_fore = pp_b1
+                #     target_back = pp_b1b
+                # elif 'Heart' in card_name:
+                #     target_fore = pp_b2
+                #     target_back = pp_b2b
+                # elif 'Spade' in card_name:
+                #     target_fore = pp_b3
+                #     target_back = pp_b3b
+                # elif 'Club' in card_name:
+                #     target_fore = pp_b4
+                #     target_back = pp_b4b
+
+                if 'K' in card_name:
+                    target_fore = pp_b1
+                    target_back = pp_b1b
+                elif 'Q' in card_name:
+                    target_fore = pp_b2
+                    target_back = pp_b2b
+                elif 'J' in card_name:
+                    target_fore = pp_b3
+                    target_back = pp_b3b
+                # elif 'Club' in card_name:
+                #     target_fore = pp_b4
+                #     target_back = pp_b4b
+
+
+            # rospy.loginfo('Current pattern: %s', target) 
+
+            if index == len(pp):
+                break
+
+            th_arr = ikine_prrp(pp2[index], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, upper)
+            angles = np.append(angles, p2_ori)
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        time.sleep(3.0)
+
+        index = 0
+        while not rospy.is_shutdown(): # While loop 3 : Down
+            rospy.loginfo("Phase 3 - Go down")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            
+            th_arr = ikine_prrp(pp2[-1], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, down[index])
+            angles = np.append(angles, p2_ori)  # p2 original position
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        index =0
+        while not rospy.is_shutdown(): # While loop 4 : Up
+            rospy.loginfo("Phase 4 - Move up")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            
+            th_arr = ikine_prrp(pp2[-1], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, up[index])
+            angles = np.append(angles, p2_ori)
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        index =0
+        while not rospy.is_shutdown(): # While loop 5 : Move
+            rospy.loginfo("Phase 5 - Move card to specific position")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            th_arr = ikine_prrp(target_fore[index], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, upper)
+            angles = np.append(angles, p2_ori)
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        index =0
+        while not rospy.is_shutdown(): # While loop 6 : Go Down 
+            rospy.loginfo("Phase 6 - Go down")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            th_arr = ikine_prrp(target_fore[-1], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, down2[index])
+            angles = np.append(angles, p2_ori)
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        index =0
+        while not rospy.is_shutdown(): # While loop 7 : Detach card 
+            rospy.loginfo("Phase 7 - Detach card")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            th_arr = ikine_prrp(target_fore[-1], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, down2[-1])
+            angles = np.append(angles, p2_up[index])
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        index =0
+        while not rospy.is_shutdown(): # While loop 8 : Move up manipulator 
+            rospy.loginfo("Phase 8 - Move p2 back")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            th_arr = ikine_prrp(target_fore[-1], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, up2[index])
+            angles = np.append(angles, p2_down[index])
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+        index =0
+
+        while not rospy.is_shutdown(): # While loop 9 : Go homing position 
+            rospy.loginfo("Phase 9 - Go homing position")
+            if index == len(pp):
+                break
+            # print("up: ", up)
+            th_arr = ikine_prrp(target_back[index], 0.22, 0.2)
+            # th_arr = ikine_prrp(pp2_h[index], 0.22, 0.2)
+            th1 = th_arr[0]
+            th2 = th_arr[1]
+
+            angles = np.append(th2, upper)
+            angles = np.append(angles, p2_ori)
+
+            for i in range(len(mat_mani)):
+                temp = get_rad_offset(angles[i], offset_arr[i], min_arr[i], max_arr[i])
+                Syncwrite_param(mat_mani[i], temp)
+            Syncwrite_goal_position()   
+            index = index + 1 
+            time.sleep(0.05)
+
+
+    # Close port
+    portHandler.closePort()
